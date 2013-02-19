@@ -1,0 +1,11 @@
+================== FAILSAFE MODE ====================
+ * mount_root      mounts partition with config files
+ * /etc/config            directory with config files
+ * firstboot       reset settings to factory defaults
+ * passwd                       reset root's password
+ * reboot -f                           reboots router
+
+ please also respect:
+ http://wiki.openwrt.org/doc/howto/generic.failsafe
+=====================================================
+
