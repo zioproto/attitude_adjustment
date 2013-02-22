@@ -1,0 +1,9 @@
+
+First of all install netkit, then you can use vstart with the OpenWRT image like this:
+
+vstart openwrt --eth0=0 --con0=xterm --con1=xterm --verbose -m openwrt-uml-ext4.img -k ./openwrt-uml-vmlinux --append=root=98:0 --append=init=/etc/preinit
+
+
+Similar for labs:
+
+lstart --verbose -o --append=root=98:0 -o --append=init=/etc/preinit
