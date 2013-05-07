@@ -25,7 +25,6 @@ ifneq ($(CONFIG_TARGET_ar71xx),)
 tools-y += lzma-old squashfs
 endif
 tools-y += lzma squashfs4
-tools-y += b43-tools
 
 ifneq ($(CONFIG_PACKAGE_firmwarehotplug),)
 tools-y += sdcc
