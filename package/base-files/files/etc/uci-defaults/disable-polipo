@@ -1,4 +1,0 @@
-#!/bin/sh
-/etc/init.d/polipo stop
-/etc/init.d/polipo disable
-exit 0
