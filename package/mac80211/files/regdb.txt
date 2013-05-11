@@ -1,16 +1,7 @@
 # This is the world regulatory domain
 country 00:
-	(2402 - 2472 @ 40), (3, 20)
-        # Channel 12 - 13. No HT40 channel fits here
-        (2457 - 2482 @ 20), (3, 20), PASSIVE-SCAN, NO-IBSS
-        # Channel 14. Only JP enables this and for 802.11b only
-        (2474 - 2494 @ 20), (3, 20), PASSIVE-SCAN, NO-IBSS, NO-OFDM
-        # Channel 36 - 48
-        (5170 - 5250 @ 40), (3, 20)
-        # NB: 5260 MHz - 5700 MHz requies DFS
-        # Channel 149 - 165
-        (5735 - 5835 @ 40), (3, 20), PASSIVE-SCAN, NO-IBSS
-
+	(2400 - 2483 @ 40), (0, 30)
+        (5140 - 5860 @ 40), (0, 30)
 
 country AE:
 	(2402 - 2482 @ 40), (N/A, 20)
@@ -651,13 +642,9 @@ country TR: DFS-ETSI
 country UA:
 	(2402 - 2482 @ 40), (N/A, 20)
 
-country US: DFS-FCC
-	(2402 - 2472 @ 40), (3, 27)
-	(5170 - 5250 @ 40), (3, 17)
-	(5250 - 5330 @ 40), (3, 20), DFS
-	(5490 - 5600 @ 40), (3, 20), DFS
-	(5650 - 5710 @ 40), (3, 20), DFS
-	(5735 - 5835 @ 40), (3, 30)
+country US:
+	(2400 - 2483 @ 40), (0, 30)
+        (5140 - 5860 @ 40), (0, 30)
 
 country UY:
 	(2402 - 2482 @ 40), (N/A, 20)
