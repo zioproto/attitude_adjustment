@@ -10,7 +10,7 @@
  #define RF5372				0x5372
 --- a/drivers/net/wireless/rt2x00/rt2800lib.c
 +++ b/drivers/net/wireless/rt2x00/rt2800lib.c
-@@ -2141,6 +2141,15 @@ static void rt2800_config_channel_rf53xx
+@@ -2140,6 +2140,15 @@ static void rt2800_config_channel_rf53xx
  	if (rf->channel <= 14) {
  		int idx = rf->channel-1;
  
@@ -26,7 +26,7 @@
  		if (test_bit(CAPABILITY_BT_COEXIST, &rt2x00dev->cap_flags)) {
  			if (rt2x00_rt_rev_gte(rt2x00dev, RT5390, REV_RT5390F)) {
  				/* r55/r59 value array of channel 1~14 */
-@@ -2598,6 +2607,7 @@ static void rt2800_config_channel(struct
+@@ -2597,6 +2606,7 @@ static void rt2800_config_channel(struct
  	case RF3322:
  		rt2800_config_channel_rf3322(rt2x00dev, conf, rf, info);
  		break;
@@ -34,7 +34,7 @@
  	case RF5360:
  	case RF5370:
  	case RF5372:
-@@ -2614,6 +2624,7 @@ static void rt2800_config_channel(struct
+@@ -2613,6 +2623,7 @@ static void rt2800_config_channel(struct
  
  	if (rt2x00_rf(rt2x00dev, RF3290) ||
  	    rt2x00_rf(rt2x00dev, RF3322) ||
@@ -42,7 +42,7 @@
  	    rt2x00_rf(rt2x00dev, RF5360) ||
  	    rt2x00_rf(rt2x00dev, RF5370) ||
  	    rt2x00_rf(rt2x00dev, RF5372) ||
-@@ -2778,7 +2789,8 @@ static void rt2800_config_channel(struct
+@@ -2777,7 +2788,8 @@ static void rt2800_config_channel(struct
  	/*
  	 * Clear update flag
  	 */
@@ -52,7 +52,7 @@
  		rt2800_bbp_read(rt2x00dev, 49, &bbp);
  		rt2x00_set_field8(&bbp, BBP49_UPDATE_FLAG, 0);
  		rt2800_bbp_write(rt2x00dev, 49, bbp);
-@@ -3224,6 +3236,7 @@ void rt2800_vco_calibration(struct rt2x0
+@@ -3223,6 +3235,7 @@ void rt2800_vco_calibration(struct rt2x0
  		rt2800_rfcsr_write(rt2x00dev, 7, rfcsr);
  		break;
  	case RF3290:
@@ -60,7 +60,7 @@
  	case RF5360:
  	case RF5370:
  	case RF5372:
-@@ -3563,7 +3576,8 @@ static int rt2800_init_registers(struct 
+@@ -3562,7 +3575,8 @@ static int rt2800_init_registers(struct 
  	} else if (rt2x00_rt(rt2x00dev, RT3572)) {
  		rt2800_register_write(rt2x00dev, TX_SW_CFG0, 0x00000400);
  		rt2800_register_write(rt2x00dev, TX_SW_CFG1, 0x00080606);
@@ -70,7 +70,7 @@
  		   rt2x00_rt(rt2x00dev, RT5392) ||
  		   rt2x00_rt(rt2x00dev, RT5592)) {
  		rt2800_register_write(rt2x00dev, TX_SW_CFG0, 0x00000404);
-@@ -4216,9 +4230,13 @@ static void rt2800_init_bbp_3352(struct 
+@@ -4215,9 +4229,13 @@ static void rt2800_init_bbp_3352(struct 
  
  	rt2800_bbp_write(rt2x00dev, 82, 0x62);
  
@@ -87,7 +87,7 @@
  
  	rt2800_bbp_write(rt2x00dev, 86, 0x38);
  
-@@ -4232,9 +4250,13 @@ static void rt2800_init_bbp_3352(struct 
+@@ -4231,9 +4249,13 @@ static void rt2800_init_bbp_3352(struct 
  
  	rt2800_bbp_write(rt2x00dev, 104, 0x92);
  
@@ -104,7 +104,7 @@
  
  	rt2800_bbp_write(rt2x00dev, 120, 0x50);
  
-@@ -4259,6 +4281,13 @@ static void rt2800_init_bbp_3352(struct 
+@@ -4258,6 +4280,13 @@ static void rt2800_init_bbp_3352(struct 
  	rt2800_bbp_write(rt2x00dev, 143, 0xa2);
  
  	rt2800_bbp_write(rt2x00dev, 148, 0xc8);
@@ -118,7 +118,7 @@
  }
  
  static void rt2800_init_bbp_3390(struct rt2x00_dev *rt2x00dev)
-@@ -4543,6 +4572,7 @@ static void rt2800_init_bbp(struct rt2x0
+@@ -4542,6 +4571,7 @@ static void rt2800_init_bbp(struct rt2x0
  		rt2800_init_bbp_3290(rt2x00dev);
  		break;
  	case RT3352:
@@ -126,7 +126,7 @@
  		rt2800_init_bbp_3352(rt2x00dev);
  		break;
  	case RT3390:
-@@ -5182,6 +5212,76 @@ static void rt2800_init_rfcsr_3572(struc
+@@ -5181,6 +5211,76 @@ static void rt2800_init_rfcsr_3572(struc
  	rt2800_normal_mode_setup_3xxx(rt2x00dev);
  }
  
@@ -203,7 +203,7 @@
  static void rt2800_init_rfcsr_5390(struct rt2x00_dev *rt2x00dev)
  {
  	rt2800_rf_init_calibration(rt2x00dev, 2);
-@@ -5410,6 +5510,9 @@ static void rt2800_init_rfcsr(struct rt2
+@@ -5409,6 +5509,9 @@ static void rt2800_init_rfcsr(struct rt2
  	case RT3572:
  		rt2800_init_rfcsr_3572(rt2x00dev);
  		break;

@@ -239,7 +239,17 @@
  		break;
  	case cpu_to_le16(IEEE80211_STYPE_ASSOC_RESP):
  	case cpu_to_le16(IEEE80211_STYPE_REASSOC_RESP):
-@@ -3059,10 +3067,16 @@ static int prepare_for_handlers(struct i
+@@ -3008,6 +3016,9 @@ static int prepare_for_handlers(struct i
+ 	case NL80211_IFTYPE_ADHOC:
+ 		if (!bssid)
+ 			return 0;
++		if (ether_addr_equal(sdata->vif.addr, hdr->addr2) ||
++		    ether_addr_equal(sdata->u.ibss.bssid, hdr->addr2))
++			return 0;
+ 		if (ieee80211_is_beacon(hdr->frame_control)) {
+ 			return 1;
+ 		} else if (!ieee80211_bssid_match(bssid, sdata->u.ibss.bssid)) {
+@@ -3059,10 +3070,16 @@ static int prepare_for_handlers(struct i
  		}
  		break;
  	case NL80211_IFTYPE_WDS:
@@ -373,7 +383,54 @@
  static void ath_tx_complete_buf(struct ath_softc *sc, struct ath_buf *bf,
 --- a/drivers/net/wireless/ath/ath9k/main.c
 +++ b/drivers/net/wireless/ath/ath9k/main.c
-@@ -2094,7 +2094,7 @@ static void ath9k_wow_add_pattern(struct
+@@ -209,6 +209,7 @@ static bool ath_complete_reset(struct at
+ 	struct ath_hw *ah = sc->sc_ah;
+ 	struct ath_common *common = ath9k_hw_common(ah);
+ 	unsigned long flags;
++	int i;
+ 
+ 	if (ath_startrecv(sc) != 0) {
+ 		ath_err(common, "Unable to restart recv logic\n");
+@@ -236,6 +237,15 @@ static bool ath_complete_reset(struct at
+ 		}
+ 	work:
+ 		ath_restart_work(sc);
++
++		for (i = 0; i < ATH9K_NUM_TX_QUEUES; i++) {
++			if (!ATH_TXQ_SETUP(sc, i))
++				continue;
++
++			spin_lock_bh(&sc->tx.txq[i].axq_lock);
++			ath_txq_schedule(sc, &sc->tx.txq[i]);
++			spin_unlock_bh(&sc->tx.txq[i].axq_lock);
++		}
+ 	}
+ 
+ 	if ((ah->caps.hw_caps & ATH9K_HW_CAP_ANT_DIV_COMB) && sc->ant_rx != 3)
+@@ -543,21 +553,10 @@ chip_reset:
+ 
+ static int ath_reset(struct ath_softc *sc)
+ {
+-	int i, r;
++	int r;
+ 
+ 	ath9k_ps_wakeup(sc);
+-
+ 	r = ath_reset_internal(sc, NULL);
+-
+-	for (i = 0; i < ATH9K_NUM_TX_QUEUES; i++) {
+-		if (!ATH_TXQ_SETUP(sc, i))
+-			continue;
+-
+-		spin_lock_bh(&sc->tx.txq[i].axq_lock);
+-		ath_txq_schedule(sc, &sc->tx.txq[i]);
+-		spin_unlock_bh(&sc->tx.txq[i].axq_lock);
+-	}
+-
+ 	ath9k_ps_restore(sc);
+ 
+ 	return r;
+@@ -2094,7 +2093,7 @@ static void ath9k_wow_add_pattern(struct
  {
  	struct ath_hw *ah = sc->sc_ah;
  	struct ath9k_wow_pattern *wow_pattern = NULL;
@@ -566,7 +623,22 @@
  	 * peer's power mode is known
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -974,7 +974,7 @@ static int nl80211_send_wowlan(struct sk
+@@ -441,10 +441,12 @@ static int nl80211_prepare_wdev_dump(str
+ 			goto out_unlock;
+ 		}
+ 		*rdev = wiphy_to_dev((*wdev)->wiphy);
+-		cb->args[0] = (*rdev)->wiphy_idx;
++		/* 0 is the first index - add 1 to parse only once */
++		cb->args[0] = (*rdev)->wiphy_idx + 1;
+ 		cb->args[1] = (*wdev)->identifier;
+ 	} else {
+-		struct wiphy *wiphy = wiphy_idx_to_wiphy(cb->args[0]);
++		/* subtract the 1 again here */
++		struct wiphy *wiphy = wiphy_idx_to_wiphy(cb->args[0] - 1);
+ 		struct wireless_dev *tmp;
+ 
+ 		if (!wiphy) {
+@@ -974,7 +976,7 @@ static int nl80211_send_wowlan(struct sk
  		return -ENOBUFS;
  
  	if (dev->wiphy.wowlan->n_patterns) {
@@ -575,7 +647,7 @@
  			.max_patterns = dev->wiphy.wowlan->n_patterns,
  			.min_pattern_len = dev->wiphy.wowlan->pattern_min_len,
  			.max_pattern_len = dev->wiphy.wowlan->pattern_max_len,
-@@ -1568,8 +1568,10 @@ static int nl80211_dump_wiphy(struct sk_
+@@ -1568,8 +1570,10 @@ static int nl80211_dump_wiphy(struct sk_
  	rtnl_lock();
  	if (!state) {
  		state = kzalloc(sizeof(*state), GFP_KERNEL);
@@ -587,7 +659,7 @@
  		state->filter_wiphy = -1;
  		ret = nl80211_dump_wiphy_parse(skb, cb, state);
  		if (ret) {
-@@ -6615,12 +6617,14 @@ EXPORT_SYMBOL(cfg80211_testmode_alloc_ev
+@@ -6615,12 +6619,14 @@ EXPORT_SYMBOL(cfg80211_testmode_alloc_ev
  
  void cfg80211_testmode_event(struct sk_buff *skb, gfp_t gfp)
  {
@@ -603,7 +675,7 @@
  }
  EXPORT_SYMBOL(cfg80211_testmode_event);
  #endif
-@@ -7593,12 +7597,11 @@ static int nl80211_send_wowlan_patterns(
+@@ -7593,12 +7599,11 @@ static int nl80211_send_wowlan_patterns(
  		if (!nl_pat)
  			return -ENOBUFS;
  		pat_len = wowlan->patterns[i].pattern_len;
@@ -620,7 +692,7 @@
  				wowlan->patterns[i].pkt_offset))
  			return -ENOBUFS;
  		nla_nest_end(msg, nl_pat);
-@@ -7939,7 +7942,7 @@ static int nl80211_set_wowlan(struct sk_
+@@ -7939,7 +7944,7 @@ static int nl80211_set_wowlan(struct sk_
  		struct nlattr *pat;
  		int n_patterns = 0;
  		int rem, pat_len, mask_len, pkt_offset;
@@ -629,7 +701,7 @@
  
  		nla_for_each_nested(pat, tb[NL80211_WOWLAN_TRIG_PKT_PATTERN],
  				    rem)
-@@ -7958,26 +7961,25 @@ static int nl80211_set_wowlan(struct sk_
+@@ -7958,26 +7963,25 @@ static int nl80211_set_wowlan(struct sk_
  
  		nla_for_each_nested(pat, tb[NL80211_WOWLAN_TRIG_PKT_PATTERN],
  				    rem) {
@@ -664,7 +736,7 @@
  			if (pkt_offset > wowlan->max_pkt_offset)
  				goto error;
  			new_triggers.patterns[i].pkt_offset = pkt_offset;
-@@ -7991,11 +7993,11 @@ static int nl80211_set_wowlan(struct sk_
+@@ -7991,11 +7995,11 @@ static int nl80211_set_wowlan(struct sk_
  			new_triggers.patterns[i].pattern =
  				new_triggers.patterns[i].mask + mask_len;
  			memcpy(new_triggers.patterns[i].mask,
@@ -678,7 +750,7 @@
  			       pat_len);
  			i++;
  		}
-@@ -10066,7 +10068,8 @@ void cfg80211_mgmt_tx_status(struct wire
+@@ -10066,7 +10070,8 @@ void cfg80211_mgmt_tx_status(struct wire
  
  	genlmsg_end(msg, hdr);
  
@@ -690,7 +762,22 @@
   nla_put_failure:
 --- a/net/wireless/reg.c
 +++ b/net/wireless/reg.c
-@@ -2279,7 +2279,9 @@ void wiphy_regulatory_deregister(struct 
+@@ -2247,10 +2247,13 @@ int reg_device_uevent(struct device *dev
+ 
+ void wiphy_regulatory_register(struct wiphy *wiphy)
+ {
++	struct regulatory_request *lr;
++
+ 	if (!reg_dev_ignore_cell_hint(wiphy))
+ 		reg_num_devs_support_basehint++;
+ 
+-	wiphy_update_regulatory(wiphy, NL80211_REGDOM_SET_BY_CORE);
++	lr = get_last_request();
++	wiphy_update_regulatory(wiphy, lr->initiator);
+ }
+ 
+ void wiphy_regulatory_deregister(struct wiphy *wiphy)
+@@ -2279,7 +2282,9 @@ void wiphy_regulatory_deregister(struct 
  static void reg_timeout_work(struct work_struct *work)
  {
  	REG_DBG_PRINT("Timeout while waiting for CRDA to reply, restoring regulatory settings\n");
@@ -798,3 +885,350 @@
  	mi->prev_sample = false;
  	if (delta < 0 || (!mrr_capable && prev_sample))
  		return;
+--- a/drivers/net/wireless/rt2x00/rt2x00queue.c
++++ b/drivers/net/wireless/rt2x00/rt2x00queue.c
+@@ -936,13 +936,8 @@ void rt2x00queue_index_inc(struct queue_
+ 	spin_unlock_irqrestore(&queue->index_lock, irqflags);
+ }
+ 
+-void rt2x00queue_pause_queue(struct data_queue *queue)
++void rt2x00queue_pause_queue_nocheck(struct data_queue *queue)
+ {
+-	if (!test_bit(DEVICE_STATE_PRESENT, &queue->rt2x00dev->flags) ||
+-	    !test_bit(QUEUE_STARTED, &queue->flags) ||
+-	    test_and_set_bit(QUEUE_PAUSED, &queue->flags))
+-		return;
+-
+ 	switch (queue->qid) {
+ 	case QID_AC_VO:
+ 	case QID_AC_VI:
+@@ -958,6 +953,15 @@ void rt2x00queue_pause_queue(struct data
+ 		break;
+ 	}
+ }
++void rt2x00queue_pause_queue(struct data_queue *queue)
++{
++	if (!test_bit(DEVICE_STATE_PRESENT, &queue->rt2x00dev->flags) ||
++	    !test_bit(QUEUE_STARTED, &queue->flags) ||
++	    test_and_set_bit(QUEUE_PAUSED, &queue->flags))
++		return;
++
++	rt2x00queue_pause_queue_nocheck(queue);
++}
+ EXPORT_SYMBOL_GPL(rt2x00queue_pause_queue);
+ 
+ void rt2x00queue_unpause_queue(struct data_queue *queue)
+@@ -1019,7 +1023,7 @@ void rt2x00queue_stop_queue(struct data_
+ 		return;
+ 	}
+ 
+-	rt2x00queue_pause_queue(queue);
++	rt2x00queue_pause_queue_nocheck(queue);
+ 
+ 	queue->rt2x00dev->ops->lib->stop_queue(queue);
+ 
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -31,10 +31,12 @@
+ #include "led.h"
+ 
+ #define IEEE80211_AUTH_TIMEOUT		(HZ / 5)
++#define IEEE80211_AUTH_TIMEOUT_LONG	(HZ / 2)
+ #define IEEE80211_AUTH_TIMEOUT_SHORT	(HZ / 10)
+ #define IEEE80211_AUTH_MAX_TRIES	3
+ #define IEEE80211_AUTH_WAIT_ASSOC	(HZ * 5)
+ #define IEEE80211_ASSOC_TIMEOUT		(HZ / 5)
++#define IEEE80211_ASSOC_TIMEOUT_LONG	(HZ / 2)
+ #define IEEE80211_ASSOC_TIMEOUT_SHORT	(HZ / 10)
+ #define IEEE80211_ASSOC_MAX_TRIES	3
+ 
+@@ -209,8 +211,9 @@ ieee80211_determine_chantype(struct ieee
+ 			     struct ieee80211_channel *channel,
+ 			     const struct ieee80211_ht_operation *ht_oper,
+ 			     const struct ieee80211_vht_operation *vht_oper,
+-			     struct cfg80211_chan_def *chandef, bool verbose)
++			     struct cfg80211_chan_def *chandef, bool tracking)
+ {
++	struct ieee80211_if_managed *ifmgd = &sdata->u.mgd;
+ 	struct cfg80211_chan_def vht_chandef;
+ 	u32 ht_cfreq, ret;
+ 
+@@ -229,7 +232,7 @@ ieee80211_determine_chantype(struct ieee
+ 	ht_cfreq = ieee80211_channel_to_frequency(ht_oper->primary_chan,
+ 						  channel->band);
+ 	/* check that channel matches the right operating channel */
+-	if (channel->center_freq != ht_cfreq) {
++	if (!tracking && channel->center_freq != ht_cfreq) {
+ 		/*
+ 		 * It's possible that some APs are confused here;
+ 		 * Netgear WNDR3700 sometimes reports 4 higher than
+@@ -237,11 +240,10 @@ ieee80211_determine_chantype(struct ieee
+ 		 * since we look at probe response/beacon data here
+ 		 * it should be OK.
+ 		 */
+-		if (verbose)
+-			sdata_info(sdata,
+-				   "Wrong control channel: center-freq: %d ht-cfreq: %d ht->primary_chan: %d band: %d - Disabling HT\n",
+-				   channel->center_freq, ht_cfreq,
+-				   ht_oper->primary_chan, channel->band);
++		sdata_info(sdata,
++			   "Wrong control channel: center-freq: %d ht-cfreq: %d ht->primary_chan: %d band: %d - Disabling HT\n",
++			   channel->center_freq, ht_cfreq,
++			   ht_oper->primary_chan, channel->band);
+ 		ret = IEEE80211_STA_DISABLE_HT | IEEE80211_STA_DISABLE_VHT;
+ 		goto out;
+ 	}
+@@ -295,7 +297,7 @@ ieee80211_determine_chantype(struct ieee
+ 				channel->band);
+ 		break;
+ 	default:
+-		if (verbose)
++		if (!(ifmgd->flags & IEEE80211_STA_DISABLE_VHT))
+ 			sdata_info(sdata,
+ 				   "AP VHT operation IE has invalid channel width (%d), disable VHT\n",
+ 				   vht_oper->chan_width);
+@@ -304,7 +306,7 @@ ieee80211_determine_chantype(struct ieee
+ 	}
+ 
+ 	if (!cfg80211_chandef_valid(&vht_chandef)) {
+-		if (verbose)
++		if (!(ifmgd->flags & IEEE80211_STA_DISABLE_VHT))
+ 			sdata_info(sdata,
+ 				   "AP VHT information is invalid, disable VHT\n");
+ 		ret = IEEE80211_STA_DISABLE_VHT;
+@@ -317,7 +319,7 @@ ieee80211_determine_chantype(struct ieee
+ 	}
+ 
+ 	if (!cfg80211_chandef_compatible(chandef, &vht_chandef)) {
+-		if (verbose)
++		if (!(ifmgd->flags & IEEE80211_STA_DISABLE_VHT))
+ 			sdata_info(sdata,
+ 				   "AP VHT information doesn't match HT, disable VHT\n");
+ 		ret = IEEE80211_STA_DISABLE_VHT;
+@@ -333,18 +335,27 @@ out:
+ 	if (ret & IEEE80211_STA_DISABLE_VHT)
+ 		vht_chandef = *chandef;
+ 
++	/*
++	 * Ignore the DISABLED flag when we're already connected and only
++	 * tracking the APs beacon for bandwidth changes - otherwise we
++	 * might get disconnected here if we connect to an AP, update our
++	 * regulatory information based on the AP's country IE and the
++	 * information we have is wrong/outdated and disables the channel
++	 * that we're actually using for the connection to the AP.
++	 */
+ 	while (!cfg80211_chandef_usable(sdata->local->hw.wiphy, chandef,
+-					IEEE80211_CHAN_DISABLED)) {
++					tracking ? 0 :
++						   IEEE80211_CHAN_DISABLED)) {
+ 		if (WARN_ON(chandef->width == NL80211_CHAN_WIDTH_20_NOHT)) {
+ 			ret = IEEE80211_STA_DISABLE_HT |
+ 			      IEEE80211_STA_DISABLE_VHT;
+-			goto out;
++			break;
+ 		}
+ 
+ 		ret |= chandef_downgrade(chandef);
+ 	}
+ 
+-	if (chandef->width != vht_chandef.width && verbose)
++	if (chandef->width != vht_chandef.width && !tracking)
+ 		sdata_info(sdata,
+ 			   "capabilities/regulatory prevented using AP HT/VHT configuration, downgraded\n");
+ 
+@@ -384,7 +395,7 @@ static int ieee80211_config_bw(struct ie
+ 
+ 	/* calculate new channel (type) based on HT/VHT operation IEs */
+ 	flags = ieee80211_determine_chantype(sdata, sband, chan, ht_oper,
+-					     vht_oper, &chandef, false);
++					     vht_oper, &chandef, true);
+ 
+ 	/*
+ 	 * Downgrade the new channel if we associated with restricted
+@@ -3394,10 +3405,13 @@ static int ieee80211_probe_auth(struct i
+ 
+ 	if (tx_flags == 0) {
+ 		auth_data->timeout = jiffies + IEEE80211_AUTH_TIMEOUT;
+-		ifmgd->auth_data->timeout_started = true;
++		auth_data->timeout_started = true;
+ 		run_again(sdata, auth_data->timeout);
+ 	} else {
+-		auth_data->timeout_started = false;
++		auth_data->timeout =
++			round_jiffies_up(jiffies + IEEE80211_AUTH_TIMEOUT_LONG);
++		auth_data->timeout_started = true;
++		run_again(sdata, auth_data->timeout);
+ 	}
+ 
+ 	return 0;
+@@ -3434,7 +3448,11 @@ static int ieee80211_do_assoc(struct iee
+ 		assoc_data->timeout_started = true;
+ 		run_again(sdata, assoc_data->timeout);
+ 	} else {
+-		assoc_data->timeout_started = false;
++		assoc_data->timeout =
++			round_jiffies_up(jiffies +
++					 IEEE80211_ASSOC_TIMEOUT_LONG);
++		assoc_data->timeout_started = true;
++		run_again(sdata, assoc_data->timeout);
+ 	}
+ 
+ 	return 0;
+@@ -3829,7 +3847,7 @@ static int ieee80211_prep_channel(struct
+ 	ifmgd->flags |= ieee80211_determine_chantype(sdata, sband,
+ 						     cbss->channel,
+ 						     ht_oper, vht_oper,
+-						     &chandef, true);
++						     &chandef, false);
+ 
+ 	sdata->needed_rx_chains = min(ieee80211_ht_vht_rx_chains(sdata, cbss),
+ 				      local->rx_chains);
+--- a/net/wireless/core.c
++++ b/net/wireless/core.c
+@@ -772,6 +772,7 @@ void cfg80211_leave(struct cfg80211_regi
+ 		cfg80211_leave_mesh(rdev, dev);
+ 		break;
+ 	case NL80211_IFTYPE_AP:
++	case NL80211_IFTYPE_P2P_GO:
+ 		cfg80211_stop_ap(rdev, dev);
+ 		break;
+ 	default:
+--- a/drivers/net/wireless/rt2x00/rt2800lib.c
++++ b/drivers/net/wireless/rt2x00/rt2800lib.c
+@@ -5404,19 +5404,20 @@ int rt2800_enable_radio(struct rt2x00_de
+ 		     rt2800_init_registers(rt2x00dev)))
+ 		return -EIO;
+ 
++	if (unlikely(rt2800_wait_bbp_rf_ready(rt2x00dev)))
++		return -EIO;
++
+ 	/*
+ 	 * Send signal to firmware during boot time.
+ 	 */
+ 	rt2800_register_write(rt2x00dev, H2M_BBP_AGENT, 0);
+ 	rt2800_register_write(rt2x00dev, H2M_MAILBOX_CSR, 0);
+-	if (rt2x00_is_usb(rt2x00dev)) {
++	if (rt2x00_is_usb(rt2x00dev))
+ 		rt2800_register_write(rt2x00dev, H2M_INT_SRC, 0);
+-		rt2800_mcu_request(rt2x00dev, MCU_BOOT_SIGNAL, 0, 0, 0);
+-	}
++	rt2800_mcu_request(rt2x00dev, MCU_BOOT_SIGNAL, 0, 0, 0);
+ 	msleep(1);
+ 
+-	if (unlikely(rt2800_wait_bbp_rf_ready(rt2x00dev) ||
+-		     rt2800_wait_bbp_ready(rt2x00dev)))
++	if (unlikely(rt2800_wait_bbp_ready(rt2x00dev)))
+ 		return -EIO;
+ 
+ 	rt2800_init_bbp(rt2x00dev);
+--- a/net/mac80211/main.c
++++ b/net/mac80211/main.c
+@@ -101,7 +101,7 @@ static u32 ieee80211_hw_conf_chan(struct
+ 	struct ieee80211_sub_if_data *sdata;
+ 	struct cfg80211_chan_def chandef = {};
+ 	u32 changed = 0;
+-	int power;
++	int power = 0;
+ 	u32 offchannel_flag;
+ 
+ 	offchannel_flag = local->hw.conf.flags & IEEE80211_CONF_OFFCHANNEL;
+@@ -155,16 +155,16 @@ static u32 ieee80211_hw_conf_chan(struct
+ 		changed |= IEEE80211_CONF_CHANGE_SMPS;
+ 	}
+ 
+-	power = chandef.chan->max_power;
+-
+ 	rcu_read_lock();
+ 	list_for_each_entry_rcu(sdata, &local->interfaces, list) {
+ 		if (!rcu_access_pointer(sdata->vif.chanctx_conf))
+ 			continue;
+-		power = min(power, sdata->vif.bss_conf.txpower);
++		power = max(power, sdata->vif.bss_conf.txpower);
+ 	}
+ 	rcu_read_unlock();
+ 
++	power = min(power, chandef.chan->max_power);
++
+ 	if (local->hw.conf.power_level != power) {
+ 		changed |= IEEE80211_CONF_CHANGE_POWER;
+ 		local->hw.conf.power_level = power;
+--- a/net/mac80211/cfg.c
++++ b/net/mac80211/cfg.c
+@@ -3332,7 +3332,7 @@ static int ieee80211_probe_client(struct
+ 		return -EINVAL;
+ 	}
+ 	band = chanctx_conf->def.chan->band;
+-	sta = sta_info_get(sdata, peer);
++	sta = sta_info_get_bss(sdata, peer);
+ 	if (sta) {
+ 		qos = test_sta_flag(sta, WLAN_STA_WME);
+ 	} else {
+--- a/net/mac80211/status.c
++++ b/net/mac80211/status.c
+@@ -180,6 +180,9 @@ static void ieee80211_frame_acked(struct
+ 	struct ieee80211_local *local = sta->local;
+ 	struct ieee80211_sub_if_data *sdata = sta->sdata;
+ 
++	if (local->hw.flags & IEEE80211_HW_REPORTS_TX_ACK_STATUS)
++		sta->last_rx = jiffies;
++
+ 	if (ieee80211_is_data_qos(mgmt->frame_control)) {
+ 		struct ieee80211_hdr *hdr = (void *) skb->data;
+ 		u8 *qc = ieee80211_get_qos_ctl(hdr);
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -1101,7 +1101,8 @@ ieee80211_tx_prepare(struct ieee80211_su
+ 		tx->sta = rcu_dereference(sdata->u.vlan.sta);
+ 		if (!tx->sta && sdata->dev->ieee80211_ptr->use_4addr)
+ 			return TX_DROP;
+-	} else if (info->flags & IEEE80211_TX_CTL_INJECTED ||
++	} else if (info->flags & (IEEE80211_TX_CTL_INJECTED |
++				  IEEE80211_TX_INTFL_NL80211_FRAME_TX) ||
+ 		   tx->sdata->control_port_protocol == tx->skb->protocol) {
+ 		tx->sta = sta_info_get_bss(sdata, hdr->addr1);
+ 	}
+--- a/drivers/net/wireless/ath/ath5k/base.c
++++ b/drivers/net/wireless/ath/ath5k/base.c
+@@ -1628,15 +1628,15 @@ ath5k_tx_frame_completed(struct ath5k_hw
+ 	ah->stats.tx_bytes_count += skb->len;
+ 	info = IEEE80211_SKB_CB(skb);
+ 
++	size = min_t(int, sizeof(info->status.rates), sizeof(bf->rates));
++	memcpy(info->status.rates, bf->rates, size);
++
+ 	tries[0] = info->status.rates[0].count;
+ 	tries[1] = info->status.rates[1].count;
+ 	tries[2] = info->status.rates[2].count;
+ 
+ 	ieee80211_tx_info_clear_status(info);
+ 
+-	size = min_t(int, sizeof(info->status.rates), sizeof(bf->rates));
+-	memcpy(info->status.rates, bf->rates, size);
+-
+ 	for (i = 0; i < ts->ts_final_idx; i++) {
+ 		struct ieee80211_tx_rate *r =
+ 			&info->status.rates[i];
+--- a/drivers/net/wireless/rt2x00/rt2800usb.c
++++ b/drivers/net/wireless/rt2x00/rt2800usb.c
+@@ -176,8 +176,8 @@ static bool rt2800usb_tx_sta_fifo_read_c
+ 		queue_work(rt2x00dev->workqueue, &rt2x00dev->txdone_work);
+ 
+ 	if (rt2800usb_txstatus_pending(rt2x00dev)) {
+-		/* Read register after 250 us */
+-		hrtimer_start(&rt2x00dev->txstatus_timer, ktime_set(0, 250000),
++		/* Read register after 1 ms */
++		hrtimer_start(&rt2x00dev->txstatus_timer, ktime_set(0, 1000000),
+ 			      HRTIMER_MODE_REL);
+ 		return false;
+ 	}
+@@ -202,8 +202,8 @@ static void rt2800usb_async_read_tx_stat
+ 	if (test_and_set_bit(TX_STATUS_READING, &rt2x00dev->flags))
+ 		return;
+ 
+-	/* Read TX_STA_FIFO register after 500 us */
+-	hrtimer_start(&rt2x00dev->txstatus_timer, ktime_set(0, 500000),
++	/* Read TX_STA_FIFO register after 2 ms */
++	hrtimer_start(&rt2x00dev->txstatus_timer, ktime_set(0, 2000000),
+ 		      HRTIMER_MODE_REL);
+ }
+ 
