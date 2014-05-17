@@ -1,5 +1,6 @@
 src-git packages git://github.com/ninuxorg/packages_12.09.git;packages_12.09-ninux
 src-git zpackages git://github.com/ninuxorg/ninux-openwrt-packages.git;stablepackages
+src-git routing git://github.com/openwrt-routing/packages;master
 #If you know what you are doing, and you have this git repositories already on your computer
 #you can use src-link feeds
 #be carefull to have the correct branch checked out in the local folders when you compile
